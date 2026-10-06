@@ -80,7 +80,5 @@ class Database:
 def is_unique_violation(exc: BaseException) -> bool:
     if not isinstance(exc, sqlite3.IntegrityError):
         return False
-    return (
-        getattr(exc, "sqlite_errorcode", None) == sqlite3.SQLITE_CONSTRAINT_UNIQUE
-        or "UNIQUE constraint failed" in str(exc)
-    )
+    code = getattr(exc, "sqlite_errorcode", None)
+    return code == sqlite3.SQLITE_CONSTRAINT_UNIQUE or "UNIQUE constraint failed" in str(exc)

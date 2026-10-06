@@ -21,7 +21,8 @@ from app.config import ConfigError, load_config
 from app.db import Database
 from app.protocol_errors import JsonErrorRequestHandler, patch_waitress_errors
 
-HOST = "0.0.0.0"
+# Todas as interfaces: necessário para a API ser acessível de fora do container Docker.
+HOST = "0.0.0.0"  # noqa: S104
 ADDRESS_IN_USE = {errno.EADDRINUSE, getattr(errno, "WSAEADDRINUSE", None)}
 ACCESS_DENIED = {errno.EACCES, getattr(errno, "WSAEACCES", None)}
 
