@@ -63,10 +63,13 @@ class TaskRepository:
         # sort_by e order já foram validados contra uma lista fechada (sem injeção).
         order_sql = ORDER_BY[sort_by](order.upper())
 
+        # S608 (SQL montado com f-string): só entram na string trechos fixos deste
+        # arquivo (filtros e ORDER_BY); os valores do usuário vão sempre como "?".
         conn = self._conn()
-        total = conn.execute(f"SELECT COUNT(*) AS total FROM tasks WHERE {where_sql}", params).fetchone()["total"]
+        count_sql = f"SELECT COUNT(*) AS total FROM tasks WHERE {where_sql}"  # noqa: S608
+        total = conn.execute(count_sql, params).fetchone()["total"]
         rows = conn.execute(
-            f"SELECT * FROM tasks WHERE {where_sql} ORDER BY {order_sql} LIMIT ? OFFSET ?",
+            f"SELECT * FROM tasks WHERE {where_sql} ORDER BY {order_sql} LIMIT ? OFFSET ?",  # noqa: S608
             [*params, limit, (page - 1) * limit],
         ).fetchall()
         return [_to_task(row) for row in rows], total
@@ -94,7 +97,8 @@ class TaskRepository:
         sets.append("updated_at = ?")
         params.extend([now_iso(), task_id])
 
-        self._conn().execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?", params)
+        # S608: os nomes de coluna vêm de UPDATABLE_COLUMNS; os valores, de parâmetros "?".
+        self._conn().execute(f"UPDATE tasks SET {', '.join(sets)} WHERE id = ?", params)  # noqa: S608
         return self.find_by_id(task_id)
 
     def delete(self, task_id):

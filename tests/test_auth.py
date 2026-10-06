@@ -192,9 +192,7 @@ class TestMe:
     def test_401_token_sem_expiracao(self, client):
         expect_error(client.get("/auth/me", headers=bearer(sign(sub="1", exp=None))), 401, "INVALID_TOKEN")
 
-    @pytest.mark.parametrize(
-        "issuer", ["task-api-express", None], ids=["emitido-pela-api-express", "sem-emissor"]
-    )
+    @pytest.mark.parametrize("issuer", ["task-api-express", None], ids=["emitido-pela-api-express", "sem-emissor"])
     def test_401_token_com_mesmo_segredo_mas_outro_emissor(self, client, issuer):
         user = register_user(client)
         token = sign(sub=str(user["user"]["id"]), iss=issuer)

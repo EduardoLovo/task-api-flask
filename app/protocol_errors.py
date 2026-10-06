@@ -22,7 +22,8 @@ PROTOCOL_ERRORS = {
 
 def protocol_error_body(status: int) -> bytes:
     code, message = PROTOCOL_ERRORS.get(
-        status, ("INTERNAL_ERROR", "Erro interno do servidor") if status >= 500 else ("BAD_REQUEST", "Requisição inválida")
+        status,
+        ("INTERNAL_ERROR", "Erro interno do servidor") if status >= 500 else ("BAD_REQUEST", "Requisição inválida"),
     )
     payload = {
         "error": {"status": status, "code": code, "message": message, "details": [], "requestId": str(uuid.uuid4())}

@@ -18,6 +18,7 @@ dependencies = [
 dev = [
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "ruff>=0.16.10",
 ]
 
 [tool.pytest.ini_options]
@@ -26,3 +27,23 @@ pythonpath = ["."]
 
 [tool.coverage.run]
 source = ["app"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+extend-exclude = ["app/docs/swagger_ui"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",  # pycodestyle (erros e avisos de estilo)
+    "F",       # pyflakes (imports e variáveis sem uso, nomes indefinidos)
+    "I",       # ordem dos imports
+    "B",       # bugbear (armadilhas comuns de Python)
+    "UP",      # pyupgrade (sintaxe moderna para a versão mínima suportada)
+    "SIM",     # simplificações
+    "S",       # bandit (problemas de segurança)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Nos testes, assert é o normal e os "segredos" são valores fixos de teste.
+"tests/**" = ["S101", "S105", "S106"]

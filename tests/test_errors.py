@@ -2,10 +2,13 @@ import gzip
 import json
 
 import pytest
+from flask import Flask
 from werkzeug.exceptions import BadGateway, RequestTimeout
 
 from app.config import ConfigError, load_config
 from app.error_handlers import normalize_error
+from app.errors import AppError
+from app.rate_limit import RateLimiter
 from tests.conftest import TEST_ENV, expect_error, register_user
 
 
@@ -198,15 +201,13 @@ class TestRateLimit:
         assert "autenticação" in error["message"]
 
     def test_janela_reinicia_apos_expirar(self):
-        from app.rate_limit import RateLimiter
-        from flask import Flask
-
         now = [0.0]
         limiter = RateLimiter(window_seconds=10, limit=1, message="x", clock=lambda: now[0])
         with Flask(__name__).test_request_context():
             limiter.hit("ip")
-            with pytest.raises(Exception):
+            with pytest.raises(AppError) as info:
                 limiter.hit("ip")
+            assert info.value.status == 429
             now[0] = 11.0
             limiter.hit("ip")  # nova janela: não lança
 
@@ -278,7 +279,13 @@ class TestConfiguracao:
 
     @pytest.mark.parametrize(
         ("name", "value"),
-        [("PORT", "abc"), ("PORT", "70000"), ("JWT_EXPIRES_IN", "uma hora"), ("APP_ENV", "staging"), ("BODY_LIMIT", "muito")],
+        [
+            ("PORT", "abc"),
+            ("PORT", "70000"),
+            ("JWT_EXPIRES_IN", "uma hora"),
+            ("APP_ENV", "staging"),
+            ("BODY_LIMIT", "muito"),
+        ],
     )
     def test_rejeita_valores_invalidos(self, name, value):
         with pytest.raises(ConfigError, match=name):

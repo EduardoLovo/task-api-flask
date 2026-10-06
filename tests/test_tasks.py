@@ -202,7 +202,9 @@ class TestUpdate:
 
     def test_400_para_corpo_vazio(self, client, alice):
         task = create_task(client, alice["auth"])
-        error = expect_error(client.patch(f"/tasks/{task['id']}", json={}, headers=alice["auth"]), 400, "VALIDATION_ERROR")
+        error = expect_error(
+            client.patch(f"/tasks/{task['id']}", json={}, headers=alice["auth"]), 400, "VALIDATION_ERROR"
+        )
         assert error["details"][0]["message"] == "Informe ao menos um campo para atualizar"
 
     @pytest.mark.parametrize("field", ["title", "status", "priority"])

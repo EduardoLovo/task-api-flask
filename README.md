@@ -46,6 +46,8 @@ Com `APP_ENV=production`, o mesmo comando sobe o waitress.
 ```bash
 uv run pytest          # roda a suíte
 uv run pytest --cov    # com relatório de cobertura
+uv run ruff check .    # lint
+uv run ruff format .   # formata (--check só verifica)
 ```
 
 ### Com Docker

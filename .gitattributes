@@ -1,0 +1,5 @@
+# Quebras de linha LF em todos os sistemas (evita diferenças de formatação entre
+# Windows e o CI no Linux).
+* text=auto eol=lf
+# Arquivos do Swagger UI distribuídos prontos: não converter.
+app/docs/swagger_ui/** -text
