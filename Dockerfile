@@ -7,7 +7,7 @@
 ARG PYTHON_IMAGE=python:3.14-slim
 
 # Estágio só para o binário do uv: em linha FROM, o Dependabot consegue atualizá-lo.
-FROM ghcr.io/astral-sh/uv:0.12.20 AS uv
+FROM ghcr.io/astral-sh/uv:0.12.23 AS uv
 
 # ---- Etapa 1: instala as dependências com uv -------------------------------
 FROM ${PYTHON_IMAGE} AS build
