@@ -1,0 +1,61 @@
+# Atualizações automáticas de dependências. Cada pull request passa pelo CI.
+# Referência: https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+
+version: 2
+
+updates:
+  # Pacotes do pyproject.toml / uv.lock
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Sao_Paulo
+    # Espera alguns dias depois de uma versão sair: versões com defeito ou
+    # comprometidas costumam ser retiradas nesse intervalo.
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    # Atualizações menores (minor/patch) chegam num PR só; majors, que podem
+    # quebrar a API, chegam em PRs separados.
+    groups:
+      producao:
+        dependency-type: production
+        update-types: [minor, patch]
+      desenvolvimento:
+        dependency-type: development
+        update-types: [minor, patch]
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+
+  # Versões das actions usadas em .github/workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 3
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "chore(ci)"
+
+  # Imagem do uv no Dockerfile (estágio "FROM ghcr.io/astral-sh/uv").
+  # A imagem do Python vem de um ARG, que o Dependabot não lê: veja o Dockerfile.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: America/Sao_Paulo
+    cooldown:
+      default-days: 3
+    commit-message:
+      prefix: "chore(docker)"

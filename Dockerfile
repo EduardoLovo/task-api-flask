@@ -1,12 +1,18 @@
 # syntax=docker/dockerfile:1
 
 # Imagem base configurável: docker build --build-arg PYTHON_IMAGE=python:3.14-slim-bookworm .
+# O Dependabot só atualiza imagens escritas por extenso em linhas FROM, então
+# a troca de versão do Python (ex.: 3.14 → 3.15) é feita à mão aqui. A tag
+# 3.14-slim já recebe as correções de segurança a cada novo build.
 ARG PYTHON_IMAGE=python:3.14-slim
+
+# Estágio só para o binário do uv: em linha FROM, o Dependabot consegue atualizá-lo.
+FROM ghcr.io/astral-sh/uv:0.12.20 AS uv
 
 # ---- Etapa 1: instala as dependências com uv -------------------------------
 FROM ${PYTHON_IMAGE} AS build
 
-COPY --from=ghcr.io/astral-sh/uv:0.12.20 /uv /usr/local/bin/uv
+COPY --from=uv /uv /usr/local/bin/uv
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
