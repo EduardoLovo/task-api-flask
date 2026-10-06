@@ -6,6 +6,7 @@ import zlib
 from flask import g, request
 
 from app.errors import AppError, bad_request, unsupported_media_type
+from app.json_depth import MAX_JSON_DEPTH, exceeds_json_depth
 from app.validation import MISSING
 
 VALID_REQUEST_ID = re.compile(r"^[\w-]{1,100}$", re.ASCII)
@@ -90,6 +91,11 @@ def make_body_parser(body_limit):
         raw = request.get_data(cache=True)
         if encoding in ZLIB_WBITS:
             raw = _decompress(raw, encoding, body_limit)
+
+        if exceeds_json_depth(raw):
+            raise bad_request(
+                "INVALID_JSON", f"JSON com aninhamento excessivo (máximo de {MAX_JSON_DEPTH} níveis)"
+            )
 
         try:
             data = json.loads(raw.decode("utf-8"), parse_constant=_reject_constant)

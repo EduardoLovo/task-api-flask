@@ -49,11 +49,25 @@ class TestCorpoDaRequisicao:
         res = client.post("/auth/login", data=raw, content_type="application/json")
         expect_error(res, 400, "INVALID_JSON")
 
-    def test_400_json_aninhado_demais(self, client):
-        # 100 mil bytes: abaixo do limite de tamanho, mas estoura a recursão do parser.
-        raw = "[" * 50_000 + "]" * 50_000
+    @pytest.mark.parametrize("levels", [33, 50_000])
+    def test_400_json_aninhado_demais(self, client, levels):
+        # 50 mil níveis: abaixo do limite de tamanho, e o resultado não pode depender
+        # da pilha da plataforma (antes dava INVALID_JSON no Windows e passava no Linux).
+        raw = "[" * levels + "]" * levels
         res = client.post("/auth/login", data=raw, content_type="application/json")
-        expect_error(res, 400, "INVALID_JSON")
+        error = expect_error(res, 400, "INVALID_JSON")
+        assert error["message"] == "JSON com aninhamento excessivo (máximo de 32 níveis)"
+
+    def test_aceita_ate_32_niveis(self, client):
+        raw = '{"a":' * 32 + "1" + "}" * 32
+        res = client.post("/auth/login", data=raw, content_type="application/json")
+        expect_error(res, 400, "VALIDATION_ERROR")  # chegou à validação: o JSON foi aceito
+
+    def test_colchetes_e_aspas_escapadas_dentro_de_strings_nao_contam(self, client):
+        password = 'x\\"' + "[{" * 40
+        raw = '{"email": "ninguem@example.com", "password": "' + password + '"}'
+        res = client.post("/auth/login", data=raw, content_type="application/json")
+        expect_error(res, 401, "INVALID_CREDENTIALS")
 
     def test_400_utf8_invalido(self, client):
         res = client.post("/auth/login", data=b'{"email": "\xff"}', content_type="application/json")
