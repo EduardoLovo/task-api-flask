@@ -17,7 +17,7 @@ O foco é **tratamento de erros completo**: toda falha, esperada ou não, devolv
 | Banco | SQLite (`sqlite3` da biblioteca padrão) |
 | Servidor | Werkzeug com reload (dev) / waitress (produção, funciona no Windows) |
 | Segurança | flask-cors, cabeçalhos equivalentes ao helmet, rate limit próprio |
-| Docs | OpenAPI 3 + Swagger UI servido localmente |
+| Docs | OpenAPI 3 + Swagger UI 5.33.1 servido localmente (mesma versão do Express, com tema escuro) |
 | Testes | pytest + pytest-cov |
 
 ## Como rodar
@@ -179,7 +179,7 @@ app/
 ├── rate_limit.py           # limite por IP em memória
 ├── validation.py           # Pydantic → details em português
 ├── logger.py / clock.py
-├── docs/                   # OpenAPI + Swagger UI
+├── docs/                   # OpenAPI + Swagger UI (arquivos em docs/swagger_ui/)
 └── modules/
     ├── auth/               # rotas, guard (login_required), service, schemas
     ├── tasks/              # rotas, service, repository, schemas

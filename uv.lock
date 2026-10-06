@@ -542,18 +542,6 @@ wheels = [
 ]
 
 [[package]]
-name = "swagger-ui-bundle"
-version = "1.1.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "jinja2" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/01/e6/d8ae21087a42627c2a04a738c947825b78c26b18595704b94bd3227197a2/swagger_ui_bundle-1.1.0.tar.gz", hash = "sha256:20673c3431c8733d5d1615ecf79d9acf30cff75202acaf21a7d9c7f489714529", size = 2599741, upload-time = "2023-11-01T19:58:17.397Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a2/66/8fb11445940bde7ca328d6aa23dd36b6056197d862f4bd6bb51c820c50e5/swagger_ui_bundle-1.1.0-py3-none-any.whl", hash = "sha256:f7526f7bb99923e10594c54247265839bec97e96b0438561ac86faf40d40dd57", size = 2626591, upload-time = "2023-11-01T19:58:15.366Z" },
-]
-
-[[package]]
 name = "task-api-flask"
 version = "1.0.0"
 source = { virtual = "." }
@@ -564,7 +552,6 @@ dependencies = [
     { name = "pydantic" },
     { name = "pyjwt" },
     { name = "python-dotenv" },
-    { name = "swagger-ui-bundle" },
     { name = "waitress" },
 ]
 
@@ -582,7 +569,6 @@ requires-dist = [
     { name = "pydantic", specifier = ">=2.13.5" },
     { name = "pyjwt", specifier = ">=2.15.1" },
     { name = "python-dotenv", specifier = ">=1.2.4" },
-    { name = "swagger-ui-bundle", specifier = ">=1.1.0" },
     { name = "waitress", specifier = ">=3.0.2" },
 ]
 

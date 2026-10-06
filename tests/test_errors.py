@@ -211,11 +211,15 @@ class TestCabecalhosEDocs:
 
     def test_serve_o_swagger_ui(self, client):
         assert client.get("/docs").status_code == 200
-        assert client.get("/docs/swagger-ui-bundle.js").status_code == 200
-        assert client.get("/docs/init.js").status_code == 200
+        for filename in ("swagger-ui.css", "swagger-ui-bundle.js", "swagger-ui-standalone-preset.js", "init.js"):
+            assert client.get(f"/docs/{filename}").status_code == 200, filename
+
+    def test_swagger_ui_com_layout_que_tem_tema_escuro(self, client):
+        assert "StandaloneLayout" in client.get("/docs/init.js").get_data(as_text=True)
+        assert ".dark-mode .swagger-ui" in client.get("/docs/swagger-ui.css").get_data(as_text=True)
 
     def test_nao_expoe_outros_arquivos_do_pacote(self, client):
-        expect_error(client.get("/docs/index.j2"), 404, "ROUTE_NOT_FOUND")
+        expect_error(client.get("/docs/LICENSE"), 404, "ROUTE_NOT_FOUND")
         expect_error(client.get("/docs/..%2F..%2Fpyproject.toml"), 404, "ROUTE_NOT_FOUND")
 
 
