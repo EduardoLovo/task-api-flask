@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Um push novo na mesma branch cancela a execução anterior, que já ficou velha.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Testes (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 é a versão mínima suportada (pyproject.toml → requires-python); 3.14 é a usada no Docker.
+        python: ["3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: astral-sh/setup-uv@v10
+        with:
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+
+      - name: Instalar dependências
+        # --locked: falha se o uv.lock estiver desatualizado em relação ao pyproject.toml.
+        run: uv sync --locked
+
+      - name: Rodar testes com cobertura
+        run: uv run pytest --cov --cov-report=term-missing
+
+  docker:
+    name: Imagem Docker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - name: Build da imagem
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          load: true
+          tags: task-api-flask:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Subir o container e esperar o health check
+        run: |
+          docker run -d --name api -p 5000:5000 \
+            -e JWT_SECRET="$(openssl rand -hex 48)" task-api-flask:ci
+          for _ in $(seq 1 30); do
+            status=$(docker inspect --format '{{.State.Health.Status}}' api)
+            [ "$status" = "healthy" ] && break
+            sleep 2
+          done
+          echo "Health: $status"
+          [ "$status" = "healthy" ]
+
+      - name: Testar a API dentro do container
+        run: |
+          curl -fsS http://localhost:5000/health
+          # Erro no formato padrão: 401 com code MISSING_TOKEN.
+          body=$(curl -s -w '\n%{http_code}' http://localhost:5000/tasks)
+          echo "$body"
+          echo "$body" | tail -1 | grep -qx 401
+          echo "$body" | head -1 | grep -q '"code":"MISSING_TOKEN"'
+
+      - name: Encerramento controlado (SIGTERM → código 0)
+        run: |
+          docker stop api
+          code=$(docker inspect --format '{{.State.ExitCode}}' api)
+          echo "Código de saída: $code"
+          [ "$code" = "0" ]
+
+      - name: Logs do container
+        if: always()
+        run: docker logs api || true

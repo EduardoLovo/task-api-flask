@@ -84,7 +84,10 @@ class TestRegister:
         assert error["details"] == [{"location": "body", "field": "role", "message": "Campo não permitido"}]
 
     def test_400_quando_o_corpo_e_um_array(self, client):
-        expect_error(client.post("/auth/register", json=[1, 2]), 400, "VALIDATION_ERROR")
+        error = expect_error(client.post("/auth/register", json=[1, 2]), 400, "VALIDATION_ERROR")
+        assert error["details"] == [
+            {"location": "body", "field": None, "message": "Corpo da requisição deve ser um objeto JSON"}
+        ]
 
     def test_409_para_email_ja_cadastrado_sem_diferenciar_maiusculas(self, client):
         register_user(client, email="dup@example.com")

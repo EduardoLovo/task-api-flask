@@ -1,5 +1,7 @@
 # Task API — Flask
 
+[![CI](https://github.com/EduardoLovo/task-api-flask/actions/workflows/ci.yml/badge.svg)](https://github.com/EduardoLovo/task-api-flask/actions/workflows/ci.yml)
+
 API REST de gerenciamento de tarefas com autenticação JWT, feita em **Python + Flask**.
 O foco é **tratamento de erros completo**: toda falha, esperada ou não, devolve uma resposta JSON no mesmo formato.
 
