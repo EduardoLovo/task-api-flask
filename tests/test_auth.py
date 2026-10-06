@@ -3,12 +3,20 @@ import time
 import jwt
 import pytest
 
+from app.modules.auth.service import JWT_ISSUER
 from app.modules.users.repository import UserRepository
 from tests.conftest import TEST_ENV, expect_error, register_user
 
 
 def bearer(token):
     return {"Authorization": f"Bearer {token}"}
+
+
+def sign(*, sub, iss=JWT_ISSUER, exp="default"):
+    """Assina um token com o segredo de teste. iss=None/exp=None omitem o campo."""
+    payload = {"sub": sub, "iss": iss, "exp": int(time.time()) + 60 if exp == "default" else exp}
+    payload = {key: value for key, value in payload.items() if value is not None}
+    return jwt.encode(payload, TEST_ENV["JWT_SECRET"], "HS256")
 
 
 class TestRegister:
@@ -168,20 +176,23 @@ class TestMe:
 
     def test_401_token_expirado(self, client):
         user = register_user(client)
-        token = jwt.encode(
-            {"sub": str(user["user"]["id"]), "exp": int(time.time()) - 60}, TEST_ENV["JWT_SECRET"], "HS256"
-        )
+        token = sign(sub=str(user["user"]["id"]), exp=int(time.time()) - 60)
         expect_error(client.get("/auth/me", headers=bearer(token)), 401, "TOKEN_EXPIRED")
 
     def test_401_quando_o_usuario_do_token_nao_existe_mais(self, client):
-        token = jwt.encode({"sub": "999999", "exp": int(time.time()) + 60}, TEST_ENV["JWT_SECRET"], "HS256")
-        expect_error(client.get("/auth/me", headers=bearer(token)), 401, "INVALID_TOKEN")
+        expect_error(client.get("/auth/me", headers=bearer(sign(sub="999999"))), 401, "INVALID_TOKEN")
 
     @pytest.mark.parametrize("subject", ["abc", "99999999999999999999999", "-1"])
     def test_401_para_subject_invalido(self, client, subject):
-        token = jwt.encode({"sub": subject, "exp": int(time.time()) + 60}, TEST_ENV["JWT_SECRET"], "HS256")
-        expect_error(client.get("/auth/me", headers=bearer(token)), 401, "INVALID_TOKEN")
+        expect_error(client.get("/auth/me", headers=bearer(sign(sub=subject))), 401, "INVALID_TOKEN")
 
     def test_401_token_sem_expiracao(self, client):
-        token = jwt.encode({"sub": "1"}, TEST_ENV["JWT_SECRET"], "HS256")
+        expect_error(client.get("/auth/me", headers=bearer(sign(sub="1", exp=None))), 401, "INVALID_TOKEN")
+
+    @pytest.mark.parametrize(
+        "issuer", ["task-api-express", None], ids=["emitido-pela-api-express", "sem-emissor"]
+    )
+    def test_401_token_com_mesmo_segredo_mas_outro_emissor(self, client, issuer):
+        user = register_user(client)
+        token = sign(sub=str(user["user"]["id"]), iss=issuer)
         expect_error(client.get("/auth/me", headers=bearer(token)), 401, "INVALID_TOKEN")

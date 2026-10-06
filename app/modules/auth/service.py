@@ -8,6 +8,10 @@ from app.modules.auth.schemas import MAX_PASSWORD_BYTES
 from app.modules.tasks.schemas import ID_RE
 
 JWT_ALGORITHM = "HS256"
+# Identifica quem emitiu o token. Cada API tem seu próprio banco de usuários:
+# sem isso, se as duas compartilhassem o JWT_SECRET, um token da outra API
+# autenticaria aqui o usuário que tivesse o mesmo id.
+JWT_ISSUER = "task-api-flask"
 
 
 def to_public_user(user):
@@ -25,7 +29,12 @@ class AuthService:
     def _issue_token(self, user):
         now = int(time.time())
         token = jwt.encode(
-            {"sub": str(user["id"]), "iat": now, "exp": now + self._config.jwt_expires_seconds},
+            {
+                "sub": str(user["id"]),
+                "iss": JWT_ISSUER,
+                "iat": now,
+                "exp": now + self._config.jwt_expires_seconds,
+            },
             self._config.jwt_secret,
             algorithm=JWT_ALGORITHM,
         )
@@ -57,7 +66,8 @@ class AuthService:
                 token,
                 self._config.jwt_secret,
                 algorithms=[JWT_ALGORITHM],
-                options={"require": ["exp", "sub"]},
+                issuer=JWT_ISSUER,
+                options={"require": ["exp", "sub", "iss"]},
             )
         except jwt.ExpiredSignatureError as exc:
             raise unauthorized("TOKEN_EXPIRED", "Token expirado, faça login novamente") from exc

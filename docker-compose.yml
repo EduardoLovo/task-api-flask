@@ -1,0 +1,30 @@
+# Sobe só a API Flask:  docker compose up --build
+# O JWT_SECRET é lido do arquivo .env desta pasta.
+
+services:
+  flask:
+    build:
+      context: .
+      args:
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.14-slim}
+    image: task-api-flask
+    init: true
+    ports:
+      - "${FLASK_PORT:-5000}:5000"
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?Defina JWT_SECRET no arquivo .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1h}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-10}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      BODY_LIMIT: ${BODY_LIMIT:-100kb}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      AUTH_RATE_LIMIT_MAX: ${AUTH_RATE_LIMIT_MAX:-10}
+    volumes:
+      - flask-data:/app/data
+    # Tempo para o encerramento controlado antes do SIGKILL.
+    stop_grace_period: 15s
+    restart: unless-stopped
+
+volumes:
+  flask-data:

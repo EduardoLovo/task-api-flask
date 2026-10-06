@@ -4,7 +4,8 @@ API REST de gerenciamento de tarefas com autenticação JWT, feita em **Python +
 O foco é **tratamento de erros completo**: toda falha, esperada ou não, devolve uma resposta JSON no mesmo formato.
 
 > Projeto irmão: `task-api-express`, com os mesmos endpoints, códigos de erro e mensagens em Node.js + Express.
-> Os tokens são compatíveis entre as duas versões quando usam o mesmo `JWT_SECRET`.
+> Cada API tem seu próprio banco de usuários, então os tokens **não** valem de uma para a outra: cada uma
+> marca o emissor no token (`iss`) e recusa tokens emitidos pela outra, mesmo com o mesmo `JWT_SECRET`.
 
 ## Stack
 
@@ -44,6 +45,15 @@ Com `APP_ENV=production`, o mesmo comando sobe o waitress.
 uv run pytest          # roda a suíte
 uv run pytest --cov    # com relatório de cobertura
 ```
+
+### Com Docker
+
+```bash
+docker compose up --build -d   # usa o JWT_SECRET do .env
+```
+
+A imagem roda com o waitress, um usuário sem privilégios e um health check em `/health`. O banco fica no
+volume `flask-data`. Para subir junto com a versão Express, use o repositório `task-api-compose`.
 
 ## Endpoints
 
