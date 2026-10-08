@@ -206,3 +206,8 @@ tests/                      # auth, tasks, erros/infra
 
 Veja [.env.example](.env.example). Só `JWT_SECRET` (mín. 32 caracteres) é obrigatória.
 As mesmas do Express, trocando `NODE_ENV` por `APP_ENV`.
+
+`CORS_ORIGIN` aceita `*` (padrão, qualquer origem) ou uma lista separada por vírgulas. Cada item é uma origem exata
+ou tem `*` no lugar de um trecho do host, para URLs de preview: `https://front-*-conta.vercel.app` aceita
+`https://front-git-main-conta.vercel.app`, mas o `*` nunca casa um ponto. Item inválido (com caminho, barra no final
+ou `*` junto de outras origens) impede a API de subir. A regra é a mesma do Express ([app/cors.py](app/cors.py)).

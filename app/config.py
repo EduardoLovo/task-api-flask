@@ -2,6 +2,8 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from app.cors import parse_cors_origin
+
 ENVIRONMENTS = ("development", "production", "test")
 DURATION_RE = re.compile(r"^(\d+)([smhd])$")
 SIZE_RE = re.compile(r"^(\d+)\s*(b|kb|mb)?$", re.IGNORECASE)
@@ -32,7 +34,8 @@ class Config:
     jwt_expires_in: str
     jwt_expires_seconds: int
     bcrypt_rounds: int
-    cors_origin: str
+    # "*" ou as origens liberadas, já como regex (veja app/cors.py).
+    cors_origins: str | tuple[re.Pattern, ...]
     body_limit_bytes: int
     rate_limit: RateLimitConfig
     trust_proxy: int = 0
@@ -91,6 +94,11 @@ class _Reader:
             return value, 0
         return value, int(match.group(1)) * SECONDS_PER_UNIT[match.group(2)]
 
+    def cors_origins(self, name, default):
+        origins, problems = parse_cors_origin(self._raw(name, default))
+        self.problems.extend((name, message) for message in problems)
+        return origins
+
     def size(self, name, default):
         value = self._raw(name, default)
         match = SIZE_RE.fullmatch(value)
@@ -114,7 +122,7 @@ def load_config(env: Mapping[str, str]) -> Config:
     )
     jwt_expires_in, jwt_expires_seconds = r.duration("JWT_EXPIRES_IN", "1h")
     bcrypt_rounds = r.integer("BCRYPT_ROUNDS", 10, 4, 15)
-    cors_origin = r.text("CORS_ORIGIN", "*")
+    cors_origins = r.cors_origins("CORS_ORIGIN", "*")
     body_limit_bytes = r.size("BODY_LIMIT", "100kb")
     window_ms = r.integer("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000, 1)
     rate_max = r.integer("RATE_LIMIT_MAX", 100, 1)
@@ -133,7 +141,7 @@ def load_config(env: Mapping[str, str]) -> Config:
         jwt_expires_in=jwt_expires_in,
         jwt_expires_seconds=jwt_expires_seconds,
         bcrypt_rounds=bcrypt_rounds,
-        cors_origin=cors_origin,
+        cors_origins=cors_origins,
         body_limit_bytes=body_limit_bytes,
         rate_limit=RateLimitConfig(window_seconds=window_ms / 1000, max=rate_max, auth_max=auth_max),
         trust_proxy=trust_proxy,
