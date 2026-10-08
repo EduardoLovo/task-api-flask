@@ -116,7 +116,14 @@ def run_production(app, config):
     from waitress.server import create_server
 
     patch_waitress_errors()
-    server = create_server(app, sockets=[_bind_socket(config.port)], ident="")
+    server = create_server(
+        app,
+        sockets=[_bind_socket(config.port)],
+        ident="",
+        # Por padrão o waitress apaga os cabeçalhos X-Forwarded-*. Com TRUST_PROXY,
+        # eles precisam chegar ao ProxyFix do Flask, que confia só em N proxies.
+        clear_untrusted_proxy_headers=config.trust_proxy == 0,
+    )
     _log_started(config)
     # run() trata SystemExit/KeyboardInterrupt esperando as requisições em andamento.
     server.run()
