@@ -35,7 +35,7 @@ def create_app(config, db):
     # /tasks e /tasks/ são a mesma rota (como no Express).
     app.url_map.strict_slashes = False
 
-    CORS(app, origins=config.cors_origin, expose_headers=["X-Request-Id", "Location"])
+    CORS(app, origins=config.cors_origins, expose_headers=["X-Request-Id", "Location"])
 
     # Uma conexão por requisição, aberta sob demanda e fechada no fim.
     def get_conn():
