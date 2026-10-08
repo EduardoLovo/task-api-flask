@@ -222,6 +222,27 @@ class TestRateLimit:
         error = expect_error(res, 429, "TOO_MANY_REQUESTS")
         assert "autenticação" in error["message"]
 
+    # Mesmo formato na versão Express (tests/errors.test.js); o pk é o sha256 do IP, igual nas duas.
+    PK_1_1_1_1 = "pk=:ZjE0MTIzODZhYThk:"
+
+    def test_cabecalhos_ratelimit_no_formato_draft_8_com_o_nome_da_politica_em_segundos(self, make_app):
+        client = make_app(TRUST_PROXY="1")[0].test_client()
+        res = self.hit(client, "1.1.1.1")
+        assert res.headers.get_all("RateLimit") == ['"10000-in-900sec"; r=9999; t=900']
+        assert res.headers.get_all("RateLimit-Policy") == [f'"10000-in-900sec"; q=10000; w=900; {self.PK_1_1_1_1}']
+
+    def test_nas_rotas_de_autenticacao_lista_as_duas_politicas(self, make_app):
+        client = make_app(TRUST_PROXY="1", AUTH_RATE_LIMIT_MAX="5")[0].test_client()
+        res = client.post("/auth/login", json={}, headers={"X-Forwarded-For": "1.1.1.1"})
+        assert res.headers.get_all("RateLimit") == [
+            '"10000-in-900sec"; r=9999; t=900',
+            '"5-in-900sec"; r=4; t=900',
+        ]
+        assert res.headers.get_all("RateLimit-Policy") == [
+            f'"10000-in-900sec"; q=10000; w=900; {self.PK_1_1_1_1}',
+            f'"5-in-900sec"; q=5; w=900; {self.PK_1_1_1_1}',
+        ]
+
     def test_janela_reinicia_apos_expirar(self):
         now = [0.0]
         limiter = RateLimiter(window_seconds=10, limit=1, message="x", clock=lambda: now[0])

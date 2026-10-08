@@ -21,6 +21,8 @@ from app.modules.tasks.service import TaskService
 from app.modules.users.repository import UserRepository
 from app.rate_limit import RateLimiter
 
+EXPOSED_HEADERS = ["X-Request-Id", "Location", "RateLimit", "RateLimit-Policy", "Retry-After"]
+
 
 def create_app(config, db):
     app = Flask(__name__)
@@ -35,7 +37,8 @@ def create_app(config, db):
     # /tasks e /tasks/ são a mesma rota (como no Express).
     app.url_map.strict_slashes = False
 
-    CORS(app, origins=config.cors_origins, expose_headers=["X-Request-Id", "Location"])
+    # Cabeçalhos que o JavaScript do navegador pode ler numa resposta de outra origem.
+    CORS(app, origins=config.cors_origins, expose_headers=EXPOSED_HEADERS)
 
     # Uma conexão por requisição, aberta sob demanda e fechada no fim.
     def get_conn():

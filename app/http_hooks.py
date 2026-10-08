@@ -138,8 +138,8 @@ def make_body_parser(body_limit):
 
 def add_response_headers(response):
     response.headers["X-Request-Id"] = g.get("request_id", "")
-    for name, value in g.get("rate_limit_headers", {}).items():
-        response.headers[name] = value
+    for name, value in g.get("rate_limit_headers", []):
+        response.headers.add(name, value)
     for name, value in SECURITY_HEADERS.items():
         response.headers.setdefault(name, value)
     return response
