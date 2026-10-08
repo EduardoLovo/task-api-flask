@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import math
 import threading
 import time
@@ -5,6 +7,12 @@ import time
 from flask import g, request
 
 from app.errors import too_many_requests
+
+
+def partition_key(key):
+    """Identifica o cliente sem expor o IP: o mesmo cálculo do express-rate-limit."""
+    digest = hashlib.sha256(key.encode()).hexdigest()[:12]
+    return base64.b64encode(digest.encode()).decode()
 
 
 class RateLimiter:
@@ -43,12 +51,12 @@ class RateLimiter:
 
         reset_in = max(1, math.ceil(reset_at - now))
         window = math.ceil(self.window_seconds)
-        policy = f'"{self.limit}-in-{window}sec"'
-        # Cabeçalhos no formato draft-8 do IETF (o mesmo do express-rate-limit).
-        g.rate_limit_headers = {
-            "RateLimit-Policy": f"{policy}; q={self.limit}; w={window}",
-            "RateLimit": f"{policy}; r={max(0, self.limit - count)}; t={reset_in}",
-        }
+        name = f'"{self.limit}-in-{window}sec"'
+        # Cabeçalhos no formato draft-8 do IETF, iguais aos do express-rate-limit. Uma requisição
+        # pode passar por mais de um limite (global + autenticação): cada um entra na lista.
+        headers = g.setdefault("rate_limit_headers", [])
+        headers.append(("RateLimit", f"{name}; r={max(0, self.limit - count)}; t={reset_in}"))
+        headers.append(("RateLimit-Policy", f"{name}; q={self.limit}; w={window}; pk=:{partition_key(key)}:"))
 
         if count > self.limit:
             raise too_many_requests(self.message, reset_in)

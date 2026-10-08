@@ -45,7 +45,13 @@ class TestCors:
         res = preflight(client, origin)
         assert res.status_code in (200, 204)
         assert res.headers.get("Access-Control-Allow-Origin") == origin
-        assert set(res.headers.get("Access-Control-Expose-Headers").split(", ")) == {"X-Request-Id", "Location"}
+        assert set(res.headers.get("Access-Control-Expose-Headers").split(", ")) == {
+            "X-Request-Id",
+            "Location",
+            "RateLimit",
+            "RateLimit-Policy",
+            "Retry-After",
+        }
         # A resposta muda conforme a origem: caches intermediários precisam saber disso.
         assert "Origin" in res.headers.get("Vary", "")
 

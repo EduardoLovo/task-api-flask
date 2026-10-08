@@ -167,6 +167,23 @@ Resposta: `{ "data": [...], "meta": { "page", "limit", "total", "totalPages" } }
 
 A ordem de prioridade é a mesma do Express: 404 e 405 vêm antes de exigir token.
 
+### Rate limit
+
+Limite por IP em janela fixa: `RATE_LIMIT_MAX` requisições a cada `RATE_LIMIT_WINDOW_MS` (padrão 100 a cada 15 min) e
+um limite próprio para `/auth/register` e `/auth/login` (`AUTH_RATE_LIMIT_MAX`, padrão 10). Toda resposta traz os
+cabeçalhos do [draft-8 do IETF](https://datatracker.ietf.org/doc/draft-ietf-httpapi-ratelimit-headers/), um item
+por limite aplicado (nas rotas de autenticação, os dois):
+
+```
+RateLimit: "100-in-900sec"; r=99; t=900, "10-in-900sec"; r=9; t=900
+RateLimit-Policy: "100-in-900sec"; q=100; w=900; pk=:N2U5ODFkZGU5NDk0:, "10-in-900sec"; q=10; w=900; pk=:N2U5ODFkZGU5NDk0:
+```
+
+`r` é quanto resta, `t` os segundos até a janela reiniciar, `q` o limite e `w` a janela em segundos. `pk` identifica o
+cliente sem expor o IP (início do sha256 dele, em base64). No 429 vem também o `Retry-After`. Os três cabeçalhos
+ficam liberados no CORS (`Access-Control-Expose-Headers`), para o front conseguir lê-los. O formato é o mesmo nas
+versões Express e Flask.
+
 ### Fora das requisições
 
 - **Configuração inválida** (ex.: `JWT_SECRET` ausente): o processo não sobe e lista **todos** os problemas.
