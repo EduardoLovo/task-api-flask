@@ -1,9 +1,16 @@
 from flask import Flask, g, request
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from app.docs.routes import create_docs_blueprint
 from app.error_handlers import register_error_handlers
-from app.http_hooks import add_response_headers, assign_request_id, make_body_parser
+from app.http_hooks import (
+    add_response_headers,
+    assign_request_id,
+    log_access,
+    make_body_parser,
+    start_timer,
+)
 from app.modules.auth.guard import make_login_required
 from app.modules.auth.routes import create_auth_blueprint
 from app.modules.auth.service import AuthService
@@ -17,6 +24,11 @@ from app.rate_limit import RateLimiter
 
 def create_app(config, db):
     app = Flask(__name__)
+    # Atrás de um proxy (ex.: Render), o IP real do cliente vem no X-Forwarded-For.
+    # Confiar no número exato de proxies: um a mais deixaria o cliente forjar o
+    # próprio IP e escapar do rate limit.
+    if config.trust_proxy:
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=config.trust_proxy)
     app.config["MAX_CONTENT_LENGTH"] = config.body_limit_bytes
     app.json.sort_keys = False
     app.json.ensure_ascii = False
@@ -56,6 +68,8 @@ def create_app(config, db):
 
     # A ordem importa: id da requisição → rate limit → leitura do corpo.
     app.before_request(assign_request_id)
+    app.before_request(start_timer)
+    app.after_request(log_access)
 
     @app.before_request
     def apply_global_rate_limit():

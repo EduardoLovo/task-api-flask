@@ -35,6 +35,7 @@ class Config:
     cors_origin: str
     body_limit_bytes: int
     rate_limit: RateLimitConfig
+    trust_proxy: int = 0
 
     @property
     def is_production(self):
@@ -118,6 +119,8 @@ def load_config(env: Mapping[str, str]) -> Config:
     window_ms = r.integer("RATE_LIMIT_WINDOW_MS", 15 * 60 * 1000, 1)
     rate_max = r.integer("RATE_LIMIT_MAX", 100, 1)
     auth_max = r.integer("AUTH_RATE_LIMIT_MAX", 10, 1)
+    # Quantos proxies (load balancers) ficam na frente da API. 0 = acesso direto.
+    trust_proxy = r.integer("TRUST_PROXY", 0, 0, 10)
 
     if r.problems:
         raise ConfigError(r.problems)
@@ -133,4 +136,5 @@ def load_config(env: Mapping[str, str]) -> Config:
         cors_origin=cors_origin,
         body_limit_bytes=body_limit_bytes,
         rate_limit=RateLimitConfig(window_seconds=window_ms / 1000, max=rate_max, auth_max=auth_max),
+        trust_proxy=trust_proxy,
     )

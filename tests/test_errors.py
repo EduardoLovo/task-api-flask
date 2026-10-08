@@ -182,6 +182,28 @@ class TestRequestId:
 
 
 class TestRateLimit:
+    @staticmethod
+    def hit(client, forwarded_for):
+        return client.get("/health", headers={"X-Forwarded-For": forwarded_for})
+
+    def test_sem_trust_proxy_ignora_o_x_forwarded_for(self, make_app):
+        # O cliente não escapa do limite forjando o IP.
+        client = make_app(RATE_LIMIT_MAX="1")[0].test_client()
+        self.hit(client, "1.1.1.1")
+        expect_error(self.hit(client, "2.2.2.2"), 429, "TOO_MANY_REQUESTS")
+
+    def test_com_trust_proxy_cada_cliente_real_tem_o_proprio_limite(self, make_app):
+        client = make_app(RATE_LIMIT_MAX="1", TRUST_PROXY="1")[0].test_client()
+        assert self.hit(client, "1.1.1.1").status_code == 200
+        assert self.hit(client, "2.2.2.2").status_code == 200
+        expect_error(self.hit(client, "1.1.1.1"), 429, "TOO_MANY_REQUESTS")
+
+    def test_com_trust_proxy_so_o_ultimo_ip_da_lista_conta(self, make_app):
+        # Os IPs mais à esquerda podem ter sido forjados pelo cliente.
+        client = make_app(RATE_LIMIT_MAX="1", TRUST_PROXY="1")[0].test_client()
+        self.hit(client, "9.9.9.9, 1.1.1.1")
+        expect_error(self.hit(client, "8.8.8.8, 1.1.1.1"), 429, "TOO_MANY_REQUESTS")
+
     def test_429_apos_exceder_o_limite_global_com_retry_after(self, make_app):
         app, _ = make_app(RATE_LIMIT_MAX="2")
         client = app.test_client()
@@ -285,6 +307,8 @@ class TestConfiguracao:
             ("JWT_EXPIRES_IN", "uma hora"),
             ("APP_ENV", "staging"),
             ("BODY_LIMIT", "muito"),
+            ("TRUST_PROXY", "-1"),
+            ("TRUST_PROXY", "sim"),
         ],
     )
     def test_rejeita_valores_invalidos(self, name, value):

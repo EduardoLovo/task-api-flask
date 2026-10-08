@@ -1,10 +1,12 @@
 import json
 import re
+import time
 import uuid
 import zlib
 
 from flask import g, request
 
+from app import logger
 from app.errors import AppError, bad_request, unsupported_media_type
 from app.json_depth import MAX_JSON_DEPTH, exceeds_json_depth
 from app.validation import MISSING
@@ -41,6 +43,32 @@ def assign_request_id():
     """Reaproveita o X-Request-Id do cliente/proxy quando seguro, senão gera um novo."""
     incoming = request.headers.get("X-Request-Id")
     g.request_id = incoming if incoming and VALID_REQUEST_ID.fullmatch(incoming) else str(uuid.uuid4())
+
+
+def start_timer():
+    g.request_start = time.perf_counter()
+
+
+def log_access(response):
+    """
+    Uma linha de log por requisição. O /health com sucesso fica de fora: a
+    plataforma de hospedagem o chama a cada poucos segundos.
+    """
+    if request.path == "/health" and response.status_code < 400:
+        return response
+
+    start = g.get("request_start")
+    logger.info(
+        "Requisição",
+        requestId=g.get("request_id"),
+        method=request.method,
+        path=request.path,
+        status=response.status_code,
+        durationMs=round((time.perf_counter() - start) * 1000) if start else None,
+        # Com TRUST_PROXY configurado, é o IP real do cliente (e não o do proxy).
+        ip=request.remote_addr,
+    )
+    return response
 
 
 def _has_body():
