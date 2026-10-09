@@ -1,7 +1,7 @@
 # Task API (Flask) — Anotações de estudo
 
-> **Data:** 2026-10-06 · **Stack:** Python 3.12+ · Flask 3 · Pydantic 2 · PyJWT + bcrypt · SQLite · pytest · Ruff ·
-> Docker · GitHub Actions
+> **Data:** 2026-10-06 (atualizado em 2026-10-09) · **Stack:** Python 3.12+ · Flask 3 · Pydantic 2 · PyJWT +
+> bcrypt · SQLite · pytest · Ruff · Docker · GitHub Actions · Render
 
 ---
 
@@ -21,11 +21,29 @@ repositório `task-api-compose` sobe as duas juntas e prova, com um teste de con
 Cada API tem o **próprio banco de usuários**, então os tokens **não** valem de uma para a outra. Isso é garantido
 pelo campo `iss` do token (veja a Fase 12).
 
+**Em produção:** https://task-api-flask-1ozq.onrender.com (documentação em `/docs`), no plano gratuito do Render.
+
 ---
 
 ## 2. Arquitetura
 
-Não tem frontend: é só o backend (API), consumido por qualquer cliente HTTP (Swagger UI, Postman, um app web...).
+É só o backend, consumido por qualquer cliente HTTP (Swagger UI, Postman...) e pelo front em Angular
+(`task-app-angular`), que tem um seletor para alternar entre esta API e a versão Express.
+
+### Em produção (Render)
+
+```mermaid
+flowchart LR
+    U[Navegador / cliente] -->|HTTPS| CF[Cloudflare]
+    CF --> P1[Proxy interno<br/>do Render 10.x]
+    P1 --> P2[Proxy interno<br/>do Render 10.x]
+    P2 -->|HTTP| W[Container Docker<br/>waitress · porta 5000]
+    W --> PF[ProxyFix<br/>x_for=3] --> F[Flask]
+    F --> DB[(SQLite no disco<br/>temporário do container)]
+```
+
+Cada salto acrescenta um IP no cabeçalho `X-Forwarded-For`. O `ProxyFix` atravessa exatamente 3 deles
+(`TRUST_PROXY=3`) para achar o IP real de quem fez a requisição. Veja a Fase 17.
 
 ### Caminho de uma requisição
 
@@ -61,6 +79,7 @@ main.py                 # ponto de entrada: sobe o servidor, trata sinais e erro
 app/
 ├── __init__.py         # create_app(): monta a aplicação (application factory)
 ├── config.py           # lê e valida as variáveis de ambiente
+├── cors.py             # interpreta o CORS_ORIGIN (lista de origens, com curinga)
 ├── db.py               # conexões SQLite e criação das tabelas
 ├── errors.py           # AppError e atalhos (bad_request, not_found...)
 ├── error_handlers.py   # transforma QUALQUER exceção no JSON padrão
@@ -77,7 +96,7 @@ app/
     ├── tasks/          # CRUD de tarefas
     ├── users/          # acesso à tabela de usuários
     └── health/         # /health (a API e o banco estão de pé?)
-tests/                  # 137 testes com pytest
+tests/                  # 160 testes com pytest
 .github/                # CI (workflows/ci.yml) e Dependabot (dependabot.yml)
 Dockerfile, docker-compose.yml, .dockerignore   # empacotamento em container
 .gitattributes          # quebras de linha LF em todos os sistemas
@@ -217,7 +236,8 @@ Dockerfile, docker-compose.yml, .dockerignore   # empacotamento em container
     porta sem nenhum erro. Veja a seção 7.
 
 ### Fase 10 — Testes
-- **O que foi feito:** 137 testes com pytest, com relatório de cobertura pelo `pytest-cov` (cerca de 96%).
+- **O que foi feito:** 137 testes com pytest nesta fase (hoje são 160, com os de CORS e de proxy), com relatório
+  de cobertura pelo `pytest-cov` (cerca de 96%).
   - A fixture `make_app` cria um app novo com **banco em memória** para cada teste, então um teste não interfere no
     outro.
   - O helper `expect_error()` confere que cada erro segue exatamente o formato padrão.
@@ -282,6 +302,59 @@ Dockerfile, docker-compose.yml, .dockerignore   # empacotamento em container
     `0.0.0.0` necessário no Docker. Marcados com `# noqa` e o motivo escrito do lado.
 - Job **Lint** no CI: `ruff check`, `ruff format --check` e **actionlint** (verifica os workflows).
 
+### Fase 17 — Deploy no Render
+
+- **Objetivo:** colocar a API no ar de graça, usando o mesmo `Dockerfile` testado no computador e no CI.
+- **Escolha da hospedagem:** o Render foi escolhido por ser o único gratuito, sem cartão, que roda as duas APIs a
+  partir do Dockerfile e integra o deploy ao CI. Alternativas descartadas: Koyeb (só 1 serviço grátis), Google Cloud
+  Run e Oracle Cloud (exigem cartão; a Oracle ainda exige administrar um servidor), Fly.io e Railway (sem plano
+  gratuito contínuo).
+- **Como o Docker vai para produção:** com `runtime: docker`, a cada deploy o Render baixa o repositório, roda o
+  `Dockerfile`, guarda a imagem e sobe um container com ela. Lá a imagem base é a `python:3.14-slim` padrão; o
+  problema da imagem corrompida era só desta máquina.
+- **O que foi feito:**
+  1. **`TRUST_PROXY`** (variável nova, padrão 0): quando maior que zero, o Flask é embrulhado no `ProxyFix` do
+     Werkzeug (`x_for=N`), que atravessa N proxies no `X-Forwarded-For` para achar o IP real usado no rate limit.
+  2. **waitress:** por padrão, ele **apaga** os cabeçalhos `X-Forwarded-*` (`clear_untrusted_proxy_headers=True`).
+     Com `TRUST_PROXY` ligado, o `main.py` desliga essa limpeza para os cabeçalhos chegarem ao `ProxyFix`. Os testes
+     não pegavam isso, porque o cliente de teste do Flask não passa pelo waitress; o problema apareceu rodando o
+     servidor de verdade (veja a seção 7).
+  3. **Log de acesso** (`start_timer` + `log_access` em `http_hooks.py`): uma linha JSON por requisição, com método,
+     rota, status, tempo, IP e `requestId`. O `/health` com sucesso fica de fora.
+  4. **Blueprint** (`render.yaml` no repositório `task-api-compose`): plano `free`, região `virginia` (não há região
+     na América do Sul), `healthCheckPath: /health`, `PORT=5000` (igual ao Dockerfile), um `JWT_SECRET` gerado pelo
+     Render e `autoDeployTrigger: checksPass`, que só faz o deploy depois que o CI passa.
+- **Medindo o `TRUST_PROXY`:** o Render não documenta quantos proxies existem. Com `1`, o log mostrava um IP interno
+  `10.x` **diferente a cada requisição**: o contador do rate limit pulava (92, 87, 91, 90, 96), porque cada
+  requisição caía num "balde" diferente. Com `3` (Cloudflare + dois proxies internos), o log mostrou o IP real, o
+  contador passou a cair de 1 em 1, e um `X-Forwarded-For` forjado foi ignorado.
+- **Limitações do plano free:** dorme após 15 min sem acesso e leva de 15 a 60 s para acordar; o disco é
+  temporário, então o SQLite começa vazio a cada deploy, reinício ou soneca. Para uma demonstração de portfólio,
+  isso foi considerado aceitável.
+
+### Fase 18 — CORS com lista de origens
+
+- **Objetivo:** liberar o front publicado (e as URLs de preview dele) sem abrir a API para qualquer site.
+- **O que foi feito:** `CORS_ORIGIN` continua aceitando `*`, mas agora também uma **lista separada por vírgula**,
+  em que cada item pode ter `*` no nome do host (ex.: `https://meu-front-*-minha-conta.vercel.app`). Fica em
+  `app/cors.py`, com testes próprios (`tests/test_cors.py`).
+- **Detalhes:** o `*` só casa letras, números e hífens, **nunca um ponto**, para não escapar para o domínio de outra
+  pessoa. Toda origem, mesmo as exatas, vira uma expressão regular ancorada: o `flask-cors` trata strings com `.`
+  como possíveis regex, e assim a comparação fica igual à da versão Express. Um valor inválido impede a API de subir.
+- Essa mudança foi feita fora desta conversa, provavelmente durante o trabalho no front. A descrição vem do commit
+  `8183c98` e do código.
+
+### Fase 19 — Cabeçalhos de rate limit expostos e padronizados
+
+- **O que foi feito:** `RateLimit`, `RateLimit-Policy` e `Retry-After` entraram no `Access-Control-Expose-Headers`,
+  para o JavaScript do front conseguir lê-los numa resposta de outra origem.
+- Quando uma requisição passa por dois limites (global e autenticação), **os dois** entram no cabeçalho. Antes, o
+  segundo sobrescrevia o primeiro, porque os cabeçalhos ficavam num dicionário; agora ficam numa lista
+  (`response.headers.add`).
+- O `RateLimit-Policy` ganhou o `pk` (*partition key*): um identificador do cliente calculado com SHA-256 do IP, igual
+  ao do `express-rate-limit`. Ele permite saber se duas respostas contaram para o mesmo cliente sem expor o IP.
+- Também feita fora desta conversa (commit `a5f61c8`).
+
 ---
 
 ## 4. Ferramentas e tecnologias
@@ -299,13 +372,15 @@ Dockerfile, docker-compose.yml, .dockerignore   # empacotamento em container
 | **flask-cors** | Liberar acesso de outros domínios | CORS da API | Evita escrever os cabeçalhos de CORS à mão |
 | **Werkzeug** | Base do Flask e servidor de desenvolvimento | Servidor com reload em dev | Já vem com o Flask |
 | **waitress** | Servidor WSGI de produção | `APP_ENV=production` e Docker | Funciona no Windows |
-| **pytest + pytest-cov** | Testes e cobertura | 137 testes | Padrão de mercado em Python |
+| **pytest + pytest-cov** | Testes e cobertura | 160 testes | Padrão de mercado em Python |
 | **Ruff** | Lint e formatação | `ruff check` e `ruff format` | Uma ferramenta substitui flake8, isort, black e bandit, e é muito rápida |
 | **Swagger UI 5 / OpenAPI 3** | Documentação interativa de API | `/docs` e `/openapi.json` | Permite testar a API pelo navegador |
 | **Docker / Compose** | Empacotar e rodar em containers | Imagem da API + volume do banco | Roda igual em qualquer máquina |
 | **GitHub Actions** | CI: verificações a cada push/PR | Lint, testes em 3 versões, imagem Docker | Integrado ao GitHub, gratuito para repositório público |
 | **Dependabot** | PRs automáticos de atualização | uv, actions e imagem do uv | Mantém as dependências em dia com o CI validando |
 | **actionlint** | Verificar workflows do GitHub Actions | Job Lint | Pega erro de sintaxe e de shell antes do push |
+| **Render** | Hospedagem de aplicações (PaaS) | Roda o container a partir do Dockerfile | Gratuito sem cartão, usa o Dockerfile e espera o CI passar |
+| **ProxyFix (Werkzeug)** | Ler o IP real atrás de proxies | `TRUST_PROXY` em produção | Já vem com o Flask; confia só em N saltos |
 
 ### Explicando as principais
 
@@ -326,6 +401,11 @@ Dockerfile, docker-compose.yml, .dockerignore   # empacotamento em container
   aguenta várias requisições ao mesmo tempo com segurança.
 - **Ruff:** `ruff check` procura *erros* (imports sem uso, armadilhas, problemas de segurança) e `ruff format` cuida
   da *aparência*. `# noqa: S608` desliga uma regra só naquela linha; o certo é sempre escrever o motivo do lado.
+- **Render:** uma plataforma onde você não administra servidor. Você aponta o repositório, e ela constrói e roda a
+  aplicação. O **Blueprint** (`render.yaml`) descreve os serviços como código, versionado no Git, em vez de
+  configurá-los clicando no painel. Uma mudança feita só no painel é sobrescrita na próxima sincronização.
+- **ProxyFix:** um *middleware WSGI*, ou seja, uma camada que fica entre o servidor (waitress) e o Flask e ajusta a
+  requisição antes de ela chegar à aplicação. Ele troca o `REMOTE_ADDR` pelo IP certo do `X-Forwarded-For`.
 
 ---
 
@@ -372,6 +452,27 @@ Endereços com a API rodando:
 - API: http://localhost:5000
 - Documentação: http://localhost:5000/docs
 - Especificação: http://localhost:5000/openapi.json
+- Em produção: https://task-api-flask-1ozq.onrender.com
+
+```bash
+# Conferir o TRUST_PROXY em produção: o "r=" do RateLimit deve cair de 1 em 1, mesmo com IP forjado
+for ip in "" 1.2.3.4 5.6.7.8; do
+  curl -s -D - -o /dev/null ${ip:+-H "X-Forwarded-For: $ip"} https://task-api-flask-1ozq.onrender.com/tasks \
+    | grep -i '^ratelimit:'
+done
+
+# Requisição marcada para achar no log do Render (a API reaproveita o X-Request-Id)
+curl -H "X-Request-Id: sonda-1" https://task-api-flask-1ozq.onrender.com/tasks
+
+# Seu IP público (IPv4), para comparar com o campo "ip" do log
+curl -4 https://ifconfig.me
+
+# Testar o waitress com TRUST_PROXY localmente (o cliente de teste do pytest não passa por ele)
+APP_ENV=production TRUST_PROXY=1 uv run main.py
+curl -H "X-Forwarded-For: 9.9.9.9, 203.0.113.7" http://localhost:5000/tasks   # o log deve mostrar 203.0.113.7
+```
+
+O deploy acontece sozinho: merge na `main` → CI verde → o Render constrói a imagem e sobe a nova versão.
 
 ---
 
@@ -411,6 +512,19 @@ Endereços com a API rodando:
   para garantir a versão mínima declarada.
 - **Comportamento dependente de plataforma:** o mesmo código pode se comportar diferente no Windows e no Linux
   (pilha, sockets, quebras de linha). Um limite explícito no código elimina a dúvida.
+- **Proxy reverso e `X-Forwarded-For`:** em produção, a requisição passa por intermediários antes de chegar à API, e
+  cada um acrescenta o IP de quem o chamou no cabeçalho. O cliente também pode mandar esse cabeçalho preenchido com
+  o que quiser, então só os últimos N IPs (os adicionados pelos proxies de confiança) são confiáveis.
+- **Cold start:** o tempo para acordar um serviço que estava parado. No plano free do Render, de 15 a 60 s.
+- **Disco efêmero (temporário):** tudo que o container grava some quando ele é recriado. Dados que precisam durar
+  ficam num disco persistente ou num banco gerenciado.
+- **Infraestrutura como código:** descrever a hospedagem num arquivo versionado (`render.yaml`), revisado por PR
+  como qualquer código.
+- **Cabeçalhos expostos no CORS:** numa resposta de outra origem, o navegador só deixa o JavaScript ler alguns
+  cabeçalhos básicos. Os outros (`X-Request-Id`, `RateLimit`...) precisam estar listados no
+  `Access-Control-Expose-Headers`.
+- **Teste que não cobre o ambiente real:** o cliente de teste do Flask chama a aplicação direto, sem o servidor
+  (waitress) no meio. Comportamentos do servidor só aparecem rodando o servidor de verdade.
 
 ---
 
@@ -434,6 +548,10 @@ Endereços com a API rodando:
 | Teste de JSON aninhado passava no Windows e falhava no Linux | O resultado do `json.loads` dependia do tamanho da pilha | Limite explícito de 32 níveis, checado antes do parse (Fase 14) |
 | Dependabot não atualizaria o `uv` nem o Python | Ele só lê imagens escritas por extenso em linhas `FROM` | Estágio `FROM ... AS uv`; a troca de versão do Python fica manual |
 | `pytest.raises(Exception)` aceitaria qualquer erro | Teste genérico demais (apontado pelo Ruff, regra B017) | Exigir `AppError` com status 429 |
+| Com `TRUST_PROXY=1`, o waitress continuava mostrando `127.0.0.1` | O waitress apaga os cabeçalhos `X-Forwarded-*` por padrão (`clear_untrusted_proxy_headers=True`), e o `ProxyFix` não recebia nada | `clear_untrusted_proxy_headers` desligado quando `TRUST_PROXY > 0` |
+| O Render só listava repositórios de outras pessoas | A conta do Render estava ligada a duas contas antigas do GitHub (de um bootcamp) | Conectar a conta `EduardoLovo` com acesso só aos três repositórios |
+| Blueprint: "render.yaml not found" | O repositório escolhido foi este (`task-api-flask`), e não o `task-api-compose` | Conectar o repositório certo |
+| Contador do rate limit pulando em produção | `TRUST_PROXY=1`: a API via o IP de proxies internos do Render (`10.x`), diferente a cada requisição | Medir com requisições marcadas e fixar `TRUST_PROXY=3` no `render.yaml` |
 
 ---
 
@@ -452,6 +570,12 @@ Endereços com a API rodando:
 - Um fluxo profissional: CI, `main` protegida, PRs, Dependabot, lint e formatação automáticos.
 - Comparar o mesmo projeto em duas stacks (Flask × Express) ajuda a ver o que é conceito e o que é detalhe do
   framework.
+- Fazer deploy de um container: como a imagem testada no CI vira o serviço em produção, e as limitações reais de um
+  plano gratuito (soneca, disco temporário, cota de horas).
+- Que um valor não documentado (quantos proxies existem) se descobre medindo, com requisições marcadas e logs, e
+  não chutando: chutar alto deixaria o cliente forjar o IP; chutar baixo junta todos os visitantes num balde só.
+- Que testes passando não garantem o comportamento em produção: o servidor (waitress) tem regras próprias, e vale
+  rodar o servidor de verdade antes do deploy.
 
 ---
 
@@ -459,14 +583,20 @@ Endereços com a API rodando:
 
 **Melhorias possíveis**
 - Cobertura mínima de testes no CI (`--cov-fail-under`).
-- Publicar a imagem no GitHub Container Registry e fazer o deploy.
-- Trocar o SQLite por **PostgreSQL** e usar migrations (ex.: Alembic), em vez de `CREATE TABLE IF NOT EXISTS`.
+- Trocar o `CORS_ORIGIN` de `*` para o domínio do front quando ele estiver publicado.
+- Trocar o SQLite por **PostgreSQL** e usar migrations (ex.: Alembic), em vez de `CREATE TABLE IF NOT EXISTS`, para
+  os dados sobreviverem aos reinícios (exige um plano pago ou um banco gerenciado: o Postgres gratuito do Render
+  expira em 30 dias).
 - Rate limit compartilhado entre processos (ex.: Redis), já que hoje ele fica na memória de cada processo.
 - Refresh token e logout (hoje o token só expira).
 - Resolver a imagem corrompida no Docker local e remover o `PYTHON_IMAGE` dos `.env`.
 - Frontend em Angular consumindo as duas APIs (em andamento: `task-app-angular`).
 
 **Documentação oficial**
+- Render (Docker): https://render.com/docs/docker · Blueprint: https://render.com/docs/blueprint-spec
+- Werkzeug `ProxyFix`: https://werkzeug.palletsprojects.com/en/stable/middleware/proxy_fix/
+- waitress (proxies confiáveis): https://docs.pylonsproject.org/projects/waitress/en/stable/arguments.html
+- CORS (MDN): https://developer.mozilla.org/pt-BR/docs/Web/HTTP/Guides/CORS
 - Flask: https://flask.palletsprojects.com/
 - Pydantic: https://docs.pydantic.dev/
 - uv: https://docs.astral.sh/uv/
