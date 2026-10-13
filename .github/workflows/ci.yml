@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # setup-uv não publica tag de versão principal (v10): precisa da versão completa.
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           enable-cache: true
 
@@ -52,7 +52,7 @@ jobs:
       - uses: actions/checkout@v7
 
       # setup-uv não publica tag de versão principal (v10): precisa da versão completa.
-      - uses: astral-sh/setup-uv@v10.2.0
+      - uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: ${{ matrix.python }}
           enable-cache: true
